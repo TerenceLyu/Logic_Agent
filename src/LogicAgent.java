@@ -69,13 +69,14 @@ public class LogicAgent
                 return false;
             }
             //if we can derive new sentences, add to the queue
+//            System.out.println(queue);
             ArrayList<String> newK = entailNewKnowledge(k, queue.peek());
 //            System.out.println(newK);
             if (newK != null)
             {
                 for (String s: newK)
                 {
-                    if (!base.contains(s))
+                    if (!base.contains(s)&&s!=null)
                     {
                         queue.add(s);
                     }
@@ -87,7 +88,10 @@ public class LogicAgent
     }
     private static ArrayList<String> entailNewKnowledge(String k, String q)
     {
+//        System.out.println(k);
+//        System.out.println(q);
         ArrayList<String> result = new ArrayList<>();
+//        System.out.println("=>");
         if (k.contains(" => ") || q.contains(" => "))
         {
 
@@ -108,7 +112,7 @@ public class LogicAgent
                 return imply(qImplication, k);
             }
         }
-
+//        System.out.println("||");
         if (k.contains(" | ") || q.contains(" | "))
         {
             String[] kNegateOr = k.split(" \\| ");
@@ -184,23 +188,33 @@ public class LogicAgent
         String[] function = parseFunction(b);
 //        System.out.println(b);
 //        System.out.println(-1);
-        boolean negate = b.charAt(0) == '~';
+        boolean negate = false;
+        if (b.charAt(0) == '~' ^ implication[1].charAt(0) == '~')
+        {
+//            System.out.println(implication[1]);
+//            System.out.println(b);
+//            System.out.println(implication[1].charAt(0));
+//            System.out.println(b.charAt(0));
+            negate = true;
+        }
+
         if (implication[0].contains(function[0]))
         {
 //            System.out.println("func =>");
             String[] and = implication[0].split(" & ");
             ArrayList<String[]> list = new ArrayList<>();
             Map<String, String> unification = new HashMap<>();
-            boolean ok = true;
-            if (negate)
+            boolean ok = false;
+            for (int i = 0; i < and.length; i++)
             {
-                for (int i = 0; i < and.length; i++)
+                String[] f = parseFunction(and[i]);
+                if (unify(f, function, unification))
                 {
-                    String[] f = parseFunction(and[i]);
-                    if (unify(f, function, unification))
+                    if (!(b.charAt(0) == '~' ^ and[i].charAt(0) == '~'))
                     {
                         ok = true;
                     }
+
                 }
             }
             if (ok)
@@ -234,6 +248,7 @@ public class LogicAgent
 //        System.out.println(0);
 //        System.out.println(implication[1].contains(function[0]));
 //        System.out.println(negate);
+
         if (implication[1].contains(function[0])&&negate)
         {
 //            System.out.println("=> func");
