@@ -5,12 +5,18 @@ public class LogicAgent
 {
     private static ArrayList<String> KB;
     private static String[] Queries;
+    private static int MaxKBSize;
+//    private static Map<String, String[]> backtrackMap = new HashMap<>();
     public static void main(String[] args) throws IOException
     {
 //        System.out.println(Arrays.toString(parseFunction("~Alert(Bob,NSAIDs)")))
 //        String[] a = parseFunction("Alert(Bob,NSAIDs)");
 //        String[] b = parseFunction("Alert(x,NSAIDs)");
-//        System.out.println(entailNewKnowledge("Parent(x,y) & Ancestor(y,z) => Ancestor(x,z)", "~Ancestor(Liz,Billy)"));
+//        System.out.println(entailNewKnowledge("~Missile4(x) & ~Owns4(Nono,x) => Sells4(West,x,Nono)",
+//                "~American4(West) | ~Weapon4(y) | ~Sells4(West,y,z) | ~Hostile4(z)"));
+
+
+
         readInput();
         BufferedWriter writer = new BufferedWriter(new FileWriter("output.txt"));
         for (int i = 0; i < Queries.length; i++)
@@ -30,6 +36,7 @@ public class LogicAgent
         }
 
         count = Integer.parseInt(input.readLine());
+        MaxKBSize = count*10;
         KB = new ArrayList<>(count);
         for (int i = 0; i < count; i++)
         {
@@ -41,10 +48,11 @@ public class LogicAgent
         ArrayList<String> base = new ArrayList<>(KB);
         Queue<String> queryQueue = new LinkedList<>();
         queryQueue.add(negate(query));
-        while (queryQueue.size()!=0)
+        while (queryQueue.size()!=0&&base.size()<MaxKBSize)
         {
             if (!checkAgainstKB(queryQueue, base))
             {
+//                System.out.println("TRUE");
                 return "TRUE";
             }
             
@@ -56,7 +64,7 @@ public class LogicAgent
                 queryQueue.poll();
             }
         }
-        
+//        System.out.println("FALSE");
         return "FALSE";
     }
     private static boolean checkAgainstKB(Queue<String> queue, ArrayList<String> base)
@@ -64,10 +72,30 @@ public class LogicAgent
         for (String k: base)
         {
             //check if a contradiction arise, if found return false
-            if (negate(k).equals(queue.peek()))
+            if (isAtomic(k)&&isAtomic(queue.peek()))
             {
-                return false;
+
+                if ((k.charAt(0)=='~'^queue.peek().charAt(0)=='~')&& unify(parseFunction(k), parseFunction(queue.peek()), new HashMap<>()))
+                {
+//                    System.out.println(k+"   "+queue.peek());
+//                    Queue<String> printQ = new LinkedList<>();
+//                    printQ.offer(queue.peek());
+//                    while (!printQ.isEmpty())
+//                    {
+//                        if (backtrackMap.containsKey(printQ.peek()))
+//                        {
+//                            System.out.println(printQ.peek()+"::"+Arrays.toString(backtrackMap.get(printQ.peek())));
+//                            for (int i = 0; i < 2; i++)
+//                            {
+//                                printQ.offer(backtrackMap.get(printQ.peek())[i]);
+//                            }
+//                        }
+//                        printQ.poll();
+//                    }
+                    return false;
+                }
             }
+
             //if we can derive new sentences, add to the queue
 //            System.out.println(queue);
             ArrayList<String> newK = entailNewKnowledge(k, queue.peek());
@@ -76,8 +104,10 @@ public class LogicAgent
             {
                 for (String s: newK)
                 {
-                    if (!base.contains(s)&&s!=null)
+                    if (s!=null&&!base.contains(s)&&!queue.contains(s))
                     {
+//                        backtrackMap.put(s, new String[] {k, queue.peek()});
+//                        System.out.println(k+" ++ "+queue.peek()+" >> "+s);
                         queue.add(s);
                     }
                 }
@@ -139,7 +169,13 @@ public class LogicAgent
         String[] funcQ = parseFunction(q);
         if (unify(funcK, funcQ, unification))
         {
-            result.add(assembleFunction(funcK, unification));
+            if (q.contains("~"))
+            {
+                result.add(negate(assembleFunction(funcK, unification)));
+            }else
+            {
+                result.add(assembleFunction(funcK, unification));
+            }
             return result;
         }
         return null;
@@ -157,23 +193,44 @@ public class LogicAgent
             {
                 return null;
             }
+            Map<String, String> unification = new HashMap<>();
             for (String value : or)
             {
-                Map<String, String> unification = new HashMap<>();
                 if (unify(parseFunction(implication[1]), parseFunction(value), unification))
                 {
-                    if (implication[1].contains("~") || value.contains("~"))
+                    if (implication[1].contains("~") ^ value.contains("~"))
                     {
                         String[] and = implication[0].split(" & ");
                         for (String s : and)
                         {
-                            list.add(negate(assembleFunction(parseFunction(s), unification)));
+                            if (s.contains("~"))
+                            {
+                                list.add(assembleFunction(parseFunction(s), unification));
+                            }else
+                            {
+                                list.add(negate(assembleFunction(parseFunction(s), unification)));
+                            }
+
                         }
                     }
                 } else
                 {
                     list.add(value);
                 }
+            }
+//            System.out.println(unification);
+            for (int i = 0; i < list.size(); i++)
+            {
+//                System.out.println(list.get(i));
+                if (list.get(i).contains("~"))
+                {
+
+                    list.set(i, negate(assembleFunction(parseFunction(list.get(i)), unification)));
+                }else
+                {
+                    list.set(i, assembleFunction(parseFunction(list.get(i)), unification));
+                }
+
             }
             StringBuilder sb = new StringBuilder();
             sb.append(list.remove(0));
@@ -229,7 +286,13 @@ public class LogicAgent
                 }
                 if (list.size()==0)
                 {
-                    result.add(assembleFunction(parseFunction(implication[1]), unification));
+                    if (implication[1].contains("~"))
+                    {
+                        result.add(negate(assembleFunction(parseFunction(implication[1]), unification)));
+                    }else
+                    {
+                        result.add(assembleFunction(parseFunction(implication[1]), unification));
+                    }
                 }else
                 {
                     StringBuilder sb = new StringBuilder();
@@ -260,12 +323,18 @@ public class LogicAgent
             {
                 String[] and = implication[0].split(" & ");
                 StringBuilder sb = new StringBuilder();
-                sb.append("~");
+                if (!and[0].contains("~"))
+                {
+                    sb.append("~");
+                }
                 sb.append(assembleFunction(parseFunction(and[0]), unification));
                 for (int i = 1; i < and.length; i++)
                 {
                     sb.append(" | ");
-                    sb.append("~");
+                    if (!and[i].contains("~"))
+                    {
+                        sb.append("~");
+                    }
                     sb.append(assembleFunction(parseFunction(and[i]), unification));
                 }
                 result.add(sb.toString());
@@ -281,6 +350,8 @@ public class LogicAgent
     private static String negateOr(String[] or, String b)
     {
         String[] function = parseFunction(b);
+//        System.out.println(Arrays.toString(or));
+//        System.out.println(b);
         ArrayList<String[]> list = new ArrayList<>();
         ArrayList<String> nList = new ArrayList<>();
         Map<String, String> unification = new HashMap<>();
@@ -288,11 +359,22 @@ public class LogicAgent
         for (int i = 0; i < or.length; i++)
         {
             String[] func = parseFunction(or[i]);
+            if (i == or.length-1 && list.size() == 0)
+            {
+                list.add(func);
+                if (or[i].charAt(0)=='~')
+                {
+                    nList.add("~");
+                }else
+                {
+                    nList.add("");
+                }
+                break;
+            }
             if (unify(func, function, unification))
             {
                 if (or[i].contains("~")^b.contains("~"))
                 {
-
                 }else
                 {
                     list.add(func);
@@ -332,6 +414,78 @@ public class LogicAgent
         }
         return null;
     }
+
+    private static boolean unify(String[] a, String[] b, Map<String, String> map)
+    {
+        if (a[0].equals(b[0]))
+        {
+            for (int i = 0; i < a.length; i++)
+            {
+
+                if (!a[i].equals(b[i]))
+                {
+                    if (isVariable(a[i]))
+                    {
+                        if (unifyVariable(b, a, map, i)) return false;
+
+                    }else if (isVariable(b[i]))
+                    {
+                        if (unifyVariable(a, b, map, i)) return false;
+                    }else
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean unifyVariable(String[] a, String[] b, Map<String, String> map, int i)
+    {
+        if (map.containsKey(b[i]))
+        {
+            if (!map.get(b[i]).equals(a[i]))
+            {
+                return true;
+            }
+        }else
+        {
+            for (String s : map.keySet())
+            {
+                if (map.get(s).equals(b[i]))
+                {
+                    map.put(s, a[i]);
+                }
+            }
+            map.put(b[i], a[i]);
+        }
+        return false;
+    }
+
+    private static boolean isAtomic(String s)
+    {
+        return !(s.contains("=>")||s.contains("|")||s.contains("&"));
+    }
+    private static boolean isVariable(String s)
+    {
+        if (s.length() != 1)
+        {
+            return false;
+        }
+        return s.charAt(0)>='a' && s.charAt(0)<='z';
+    }
+    private static String[] parseFunction(String f)
+    {
+        if (f.charAt(0)=='~')
+        {
+            f = f.substring(1);
+        }
+        String[] result = f.split("[(,)]");
+
+        return result;
+    }
     private static String assembleFunction(String[] function, Map<String, String> unification)
     {
         StringBuilder sb = new StringBuilder();
@@ -353,67 +507,6 @@ public class LogicAgent
         }
         sb.append(')');
         return sb.toString();
-    }
-    private static boolean unify(String[] a, String[] b, Map<String, String> map)
-    {
-        if (a[0].equals(b[0]))
-        {
-            for (int i = 0; i < a.length; i++)
-            {
-                if (!a[i].equals(b[i]))
-                {
-                    if (isVariable(a[i]))
-                    {
-                        if (map.containsKey(a[i]))
-                        {
-                            if (!map.get(a[i]).equals(b[i]))
-                            {
-                                return false;
-                            }
-                        }else
-                        {
-                            map.put(a[i], b[i]);
-                        }
-
-                    }else if (isVariable(b[i]))
-                    {
-                        if (map.containsKey(b[i]))
-                        {
-                            if (!map.get(b[i]).equals(a[i]))
-                            {
-                                return false;
-                            }
-                        }else
-                        {
-                            map.put(b[i], a[i]);
-                        }
-                    }else
-                    {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-    private static boolean isVariable(String s)
-    {
-        if (s.length() != 1)
-        {
-            return false;
-        }
-        return s.charAt(0)>='a' && s.charAt(0)<='z';
-    }
-    private static String[] parseFunction(String f)
-    {
-        if (f.charAt(0)=='~')
-        {
-            f = f.substring(1);
-        }
-        String[] result = f.split("[(,)]");
-
-        return result;
     }
     private static String negate(String sentence)
     {
